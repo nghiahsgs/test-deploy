@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Notes — ShipKit demo</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      margin: 0; padding: 40px 20px; background: #0b0b10; color: #e5e5ee;
+      min-height: 100vh;
+    }
+    main { max-width: 620px; margin: 0 auto; }
+    h1 { font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; }
+    .sub { color: #888; margin: 0 0 24px; font-size: 13px; }
+    form { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
+    input, textarea {
+      font: inherit; color: inherit; background: #14141b; border: 1px solid #2a2a36;
+      border-radius: 6px; padding: 8px 10px;
+    }
+    textarea { min-height: 60px; resize: vertical; }
+    button {
+      font: inherit; font-weight: 600; color: white; background: #7c3aed;
+      border: 0; border-radius: 6px; padding: 8px 16px; cursor: pointer; align-self: flex-start;
+    }
+    button:hover { background: #8b5cf6; }
+    button.del { background: transparent; color: #888; padding: 2px 8px; font-size: 12px; }
+    button.del:hover { color: #f87171; background: #1a1a24; }
+    ul { list-style: none; padding: 0; margin: 0; }
+    li {
+      border: 1px solid #1e1e28; border-radius: 8px; padding: 12px 14px; margin-bottom: 10px;
+      background: #0f0f15;
+    }
+    .title-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .title { font-weight: 600; }
+    .body { color: #bbb; margin: 4px 0 0; white-space: pre-wrap; }
+    .meta { color: #666; font-size: 11px; margin-top: 4px; font-family: ui-monospace, monospace; }
+    .health { font-family: ui-monospace, monospace; font-size: 11px; color: #666; margin-top: 32px; }
+    .health.ok { color: #4ade80; }
+    .health.bad { color: #f87171; }
+    .empty { color: #666; font-size: 14px; text-align: center; padding: 20px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>📝 Notes</h1>
+    <p class="sub">Minimal fullstack demo on ShipKit — Express + Postgres.</p>
+
+    <form id="f">
+      <input id="t" placeholder="Title" required />
+      <textarea id="b" placeholder="Body (optional)"></textarea>
+      <button type="submit">Add note</button>
+    </form>
+
+    <ul id="list"></ul>
+    <p id="empty" class="empty" hidden>No notes yet. Add the first one above.</p>
+
+    <p class="health" id="health">checking db…</p>
+  </main>
+
+  <script>
+    const list = document.getElementById("list");
+    const empty = document.getElementById("empty");
+    const health = document.getElementById("health");
+
+    async function load() {
+      const r = await fetch("/api/notes");
+      const { data } = await r.json();
+      list.innerHTML = "";
+      empty.hidden = data.length > 0;
+      for (const n of data) {
+        const li = document.createElement("li");
+        li.innerHTML = `
+          <div class="title-row">
+            <span class="title"></span>
+            <button class="del" data-id="${n.id}">delete</button>
+          </div>
+          <div class="body"></div>
+          <div class="meta">#${n.id} · ${new Date(n.created_at).toLocaleString()}</div>`;
+        li.querySelector(".title").textContent = n.title;
+        li.querySelector(".body").textContent = n.body || "";
+        if (!n.body) li.querySelector(".body").remove();
+        list.appendChild(li);
+      }
+    }
+
+    document.getElementById("f").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const title = document.getElementById("t").value.trim();
+      const body  = document.getElementById("b").value.trim();
+      if (!title) return;
+      await fetch("/api/notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, body }),
+      });
+      e.target.reset();
+      load();
+    });
+
+    list.addEventListener("click", async (e) => {
+      const btn = e.target.closest("button.del");
+      if (!btn) return;
+      await fetch(`/api/notes/${btn.dataset.id}`, { method: "DELETE" });
+      load();
+    });
+
+    (async () => {
+      try {
+        const r = await fetch("/api/health");
+        const { ok, error } = await r.json();
+        health.textContent = ok ? "db: connected ✓" : `db: ${error || "unhealthy"}`;
+        health.className = "health " + (ok ? "ok" : "bad");
+      } catch (err) {
+        health.textContent = "db: unreachable";
+        health.className = "health bad";
+      }
+      load();
+    })();
+  </script>
+</body>
+</html>
